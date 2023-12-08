@@ -1,0 +1,553 @@
+---
+title: "UMalaya Medication Analysis"
+author: "Yubi Mamiya"
+date: "2023-06-14"
+output: html_document
+---
+
+```{r}
+# load installed libraries
+library(tidyverse)
+library(readr)
+library(readxl)
+library(car)
+```
+
+
+```{r}
+# read data
+MeLODY_df <- read_csv('/Users/yubimamiya/Desktop/UMalaya/MeLODY_UMalaya_Data.csv')
+
+# inspect data
+str(MeLODY_df)
+MeLODY_df %>%
+  head(5)
+```
+
+```{r}
+# analyze ethnicity distribution
+Ethnicity_df <- MeLODY_df
+```
+
+```{r}
+# filter for Melayu
+Melayu_df <- filter(Ethnicity_df, race == 'Melayu')
+nrow(Melayu_df)
+```
+
+```{r}
+# Select columns with medication only
+Melayu_medication_df <- Melayu_df %>% select(45 : 1000)
+Melayu_medication_df
+```
+
+```{r}
+# Compute medication usage
+Melayu_medication_usage_df <- colSums(Melayu_medication_df, na.rm = TRUE)
+Melayu_medication_usage_df
+```
+
+
+```{r}
+# Sort medication usage for Melayu patients
+Melayu_medication_usage_df %>%
+  sort %>%
+  write.csv("/Users/yubimamiya/Desktop/UMalaya/Melayu_Medication_Usage_Df.csv", row.names=TRUE)
+```
+
+```{r}
+# medication analysis for Chinese patients
+Chinese_df <- filter(Ethnicity_df, race == 'Chinese')
+Chinese_medication_df <- Chinese_df %>% select(45 : 1000)
+Chinese_medication_usage_df <- colSums(Chinese_medication_df, na.rm = TRUE)
+Chinese_medication_usage_df %>%
+  sort %>%
+  write.csv("/Users/yubimamiya/Desktop/UMalaya/Chinese_Medication_Usage_Df.csv", row.names=TRUE)
+
+```
+
+```{r}
+# medication analysis for Indian patients
+Indian_df <- filter(Ethnicity_df, race == 'Indian')
+Indian_medication_df <- Indian_df %>% select(45 : 1000)
+Indian_medication_usage_df <- colSums(Indian_medication_df, na.rm = TRUE)
+Indian_medication_usage_df %>%
+  sort %>%
+  write.csv("/Users/yubimamiya/Desktop/UMalaya/Indian_Medication_Usage_Df.csv", row.names=TRUE)
+```
+
+```{r}
+nrow(Chinese_df)
+nrow(Indian_df)
+```
+
+
+```{r}
+# columns
+columns <- colnames(MeLODY_df)
+columns
+
+# med_class: 45 - 254
+# med_type: 255 - 1000
+```
+
+```{r}
+# select only relevant columns
+medication_df <- MeLODY_df %>% select(45 : 1000)
+head(medication_df, 5)
+```
+
+```{r}
+write.csv(MeLODY_df, "/Users/yubimamiya/Desktop/UMalaya/MeLODY_df_CSV_Copy.csv", row.names=FALSE)
+```
+
+```{r}
+medication_usage_df <- colSums(medication_df, na.rm = TRUE)
+```
+
+
+```{r}
+medication_usage_df <- colSums(medication_df, na.rm = TRUE)
+
+str(medication_usage_df)
+
+medication_usage_df %>%
+  sort %>%
+  write.csv("/Users/yubimamiya/Desktop/UMalaya/Medication_Usage_Df.csv", row.names=TRUE)
+```
+
+```{r}
+medication_classes_df <- select(MeLODY_df, '5ari_med_class':'zcp_med_class')
+head(medication_classes_df)
+
+medication_types_df <- select(MeLODY_df, 'abacavir_med_type':'vasopressin_med_type')
+head(medication_types_df)
+```
+
+```{r}
+medication_classes_usage_df <- colSums(medication_classes_df, na.rm = TRUE)
+
+medication_classes_usage_df %>%
+  sort %>%
+  write.csv("/Users/yubimamiya/Desktop/UMalaya/Medication_Classes_Usage_Df.csv", row.names=TRUE)
+
+medication_types_usage_df <- colSums(medication_types_df, na.rm = TRUE)
+
+medication_types_usage_df %>%
+  sort %>%
+  write.csv("/Users/yubimamiya/Desktop/UMalaya/Medication_Types_Usage_Df.csv", row.names=TRUE)
+```
+
+```{r}
+MeLODY_Longitudinal_df <- read_csv('/Users/yubimamiya/Downloads/longitudinal.csv')
+
+str(MeLODY_Longitudinal_df)
+MeLODY_Longitudinal_df %>%
+  head(5)
+```
+
+```{r}
+# Identify duplicates in the data frame 
+
+# sum is 0 because there are no duplicates
+
+MeLODY_Longitudinal_df %>%
+  duplicated() %>%
+  sum()
+```
+
+```{r}
+# generate placeholder patient ID's
+# '...1' is also a generated placeholder patient ID
+# ignore this step for now
+
+MeLODY_Longitudinal_df <- cbind(ID = 1:nrow(MeLODY_Longitudinal_df), MeLODY_Longitudinal_df)
+MeLODY_Longitudinal_df %>%
+  head(5)  
+```
+
+```{r}
+# Create sub-dataset for HbA1C
+
+HBA1C_df <- MeLODY_Longitudinal_df %>%
+  select('...1' | starts_with('HBA1C')) %>%
+  select(-contains('IFCC') & -contains('NGSP') & -contains('date')) %>%
+  rename('ID' = '...1')
+```
+
+```{r}
+# Create time series plot for HbA1C
+
+getOption("digits")
+options("digits" = 3)
+
+HBA1C_df %>%
+  pivot_longer(starts_with('HBA1C'),
+               names_to = 'HBA1C_timepoints',
+               values_to = 'HBA1C_values') %>%
+  mutate(HBA1C_values = as.numeric(HBA1C_values), HBA1C_timepoints = as.character(HBA1C_timepoints)) %>%
+  ggplot(aes(x = factor(HBA1C_timepoints, level = c("HBA1C_0M_lab", "HBA1C_6M_lab", "HBA1C_12M_lab", "HBA1C_18M_lab", "HBA1C_24M_lab")), y = HBA1C_values)) +
+  geom_boxplot() +
+  ylab('HBA1C values') +
+  theme_classic() +
+    theme(axis.text.y = element_text(size = 12, face = "bold"),
+          axis.text.x = element_text(size = 12, face = "bold"),
+          axis.title.y = element_text(size = 14, face = "bold"),
+          axis.title.x = element_blank(),
+          legend.position = "none") +
+  scale_x_discrete(labels=c("HBA1C_0M_lab" = "0M", "HBA1C_6M_lab" = "6M", "HBA1C_12M_lab" = "12M", "HBA1C_18M_lab" = "18M", "HBA1C_24M_lab" = "24M"))
+```
+
+```{r}
+# Create a linear model for HbA1C
+
+HBA1C_df %>%
+  pivot_longer(starts_with('HBA1C'),
+               names_to = 'HBA1C_timepoints',
+               values_to = 'HBA1C_values') %>%
+  mutate(HBA1C_values = as.numeric(HBA1C_values), HBA1C_timepoints = as.factor(HBA1C_timepoints)) %>%
+  mutate(timepoints = case_when(HBA1C_timepoints == "HBA1C_0M_lab" ~ 0,
+                                HBA1C_timepoints == "HBA1C_6M_lab" ~ 6,
+                               HBA1C_timepoints == "HBA1C_12M_lab" ~ 12,
+                               HBA1C_timepoints == "HBA1C_18M_lab" ~ 18,
+                               HBA1C_timepoints == "HBA1C_24M_lab" ~ 24)) %>%
+  ggplot(aes(x = timepoints, y = HBA1C_values, group = 1)) +
+  geom_jitter(widq = 0.5) +
+  # width of the rectangles are set to 0.5
+  geom_smooth(method=lm , color="red", fill="#69b3a2", se=TRUE) +
+  ylab('HBA1C values') +
+  xlab('Months') +
+  theme_classic() +
+      theme(axis.text.y = element_text(size = 12, face = "bold"),
+          axis.text.x = element_text(size = 12, face = "bold"),
+          axis.title.y = element_text(size = 14, face = "bold"),
+          #axis.title.x = element_blank(),
+          legend.position = "none") +
+  scale_x_continuous(breaks=seq(0, 24, 6))
+```
+
+```{r}
+# calculate slope of best fit line using linear regression linear model (lm)
+# HbA1C
+
+# Creates a data frame that contains variables of interest: timepoints & HBA1C values
+
+HBA1C_lm_df <- HBA1C_df %>%
+  pivot_longer(starts_with('HBA1C'),
+               names_to = 'HBA1C_timepoints',
+               values_to = 'HBA1C_values') %>%
+  mutate(HBA1C_values = as.numeric(HBA1C_values), HBA1C_timepoints = as.factor(HBA1C_timepoints)) %>%
+  mutate(timepoints = case_when(HBA1C_timepoints == "HBA1C_0M_lab" ~ 0,
+                                HBA1C_timepoints == "HBA1C_6M_lab" ~ 6,
+                               HBA1C_timepoints == "HBA1C_12M_lab" ~ 12,
+                               HBA1C_timepoints == "HBA1C_18M_lab" ~ 18,
+                               HBA1C_timepoints == "HBA1C_24M_lab" ~ 24))
+```
+
+```{r}
+# Use new data frame to create a linear model (lm)
+
+HBA1C_lm <- lm(HBA1C_values ~ timepoints, data = HBA1C_lm_df)
+
+summary(HBA1C_lm)
+
+# slope is -0.00256
+# standard error for slope is 0.00203
+# t-value for slope is -1.27 (want value to be far from 0 to reject null hypothesis)
+# Pr(>|t|) for slope is 0.21 which means that it is likely that the relationship is due to chance
+# Adjusted R-squared is 3.24e-05 which means that the linear model doesn't fit the data well
+# F-statistic is 1.6 indicating that there isn't a relationship
+```
+
+```{r}
+# Create new data frame for Glucose
+
+Glucose_df <- MeLODY_Longitudinal_df %>%
+  select('...1' | starts_with('Glucose (Plasma)')) %>%
+  select(-contains('date')) %>%
+  rename('ID' = '...1')
+
+head(Glucose_df)
+```
+
+```{r}
+# Create time series plot for Glucose
+
+getOption("digits")
+options("digits" = 3)
+
+Glucose_df %>%
+  pivot_longer(starts_with('Glucose'),
+               names_to = 'Glucose_timepoints',
+               values_to = 'Glucose_values') %>%
+  mutate(Glucose_values = as.numeric(Glucose_values), Glucose_timepoints = as.character(Glucose_timepoints)) %>%
+  ggplot(aes(x = factor(Glucose_timepoints, level = c("Glucose (Plasma)_0M_lab", "Glucose (Plasma)_6M_lab", "Glucose (Plasma)_12M_lab", "Glucose (Plasma)_18M_lab", "Glucose (Plasma)_24M_lab")), y = Glucose_values)) +
+  geom_boxplot() +
+  ylab('Glucose values') +
+  theme_classic() +
+    theme(axis.text.y = element_text(size = 12, face = "bold"),
+          axis.text.x = element_text(size = 12, face = "bold"),
+          axis.title.y = element_text(size = 14, face = "bold"),
+          axis.title.x = element_blank(),
+          legend.position = "none") +
+  scale_x_discrete(labels=c("Glucose (Plasma)_0M_lab" = "0M", "Glucose (Plasma)_6M_lab" = "6M", "Glucose (Plasma)_12M_lab" = "12M", "Glucose (Plasma)_18M_lab" = "18M", "Glucose (Plasma)_24M_lab" = "24M"))
+
+head(Glucose_df)
+```
+
+```{r}
+# Create a linear model for Glucose
+
+Glucose_df %>%
+  pivot_longer(starts_with('Glucose'),
+               names_to = 'Glucose_timepoints',
+               values_to = 'Glucose_values') %>%
+  mutate(Glucose_values = as.numeric(Glucose_values), Glucose_timepoints = as.factor(Glucose_timepoints)) %>%
+  mutate(timepoints = case_when(Glucose_timepoints == "Glucose (Plasma)_0M_lab" ~ 0,
+                                Glucose_timepoints == "Glucose (Plasma)_6M_lab" ~ 6,
+                               Glucose_timepoints == "Glucose (Plasma)_12M_lab" ~ 12,
+                               Glucose_timepoints == "Glucose (Plasma)_18M_lab" ~ 18,
+                               Glucose_timepoints == "Glucose (Plasma)_24M_lab" ~ 24)) %>%
+  ggplot(aes(x = timepoints, y = Glucose_values, group = 1)) +
+  geom_jitter(widq = 0.5) +
+  # width of the rectangles are set to 0.5
+  geom_smooth(method=lm , color="red", fill="#69b3a2", se=TRUE) +
+  ylab('Glucose values') +
+  xlab('Months') +
+  theme_classic() +
+      theme(axis.text.y = element_text(size = 12, face = "bold"),
+          axis.text.x = element_text(size = 12, face = "bold"),
+          axis.title.y = element_text(size = 14, face = "bold"),
+          #axis.title.x = element_blank(),
+          legend.position = "none") +
+  scale_x_continuous(breaks=seq(0, 24, 6))
+```
+
+```{r}
+# calculate slope of best fit line for Glucose
+# Creates a data frame that contains variables of interest: timepoints & Glucose values
+
+Glucose_lm_df <- Glucose_df %>%
+  pivot_longer(starts_with('Glucose'),
+               names_to = 'Glucose_timepoints',
+               values_to = 'Glucose_values') %>%
+  mutate(Glucose_values = as.numeric(Glucose_values), Glucose_timepoints = as.factor(Glucose_timepoints)) %>%
+  mutate(timepoints = case_when(Glucose_timepoints == "Glucose (Plasma)_0M_lab" ~ 0,
+                                Glucose_timepoints == "Glucose (Plasma)_6M_lab" ~ 6,
+                               Glucose_timepoints == "Glucose (Plasma)_12M_lab" ~ 12,
+                               Glucose_timepoints == "Glucose (Plasma)_18M_lab" ~ 18,
+                               Glucose_timepoints == "Glucose (Plasma)_24M_lab" ~ 24))
+```
+
+```{r}
+# Use new data frame to create a linear model (lm)
+
+Glucose_lm <- lm(Glucose_values ~ timepoints, data = Glucose_lm_df)
+
+summary(Glucose_lm)
+```
+
+```{r}
+# Create new data frame for HDL
+
+HDL_df <- MeLODY_Longitudinal_df %>%
+  select('...1' | starts_with('HDL (Serum)')) %>%
+  select(-contains('date')) %>%
+  rename('ID' = '...1')
+```
+
+```{r}
+# Create time series plot for HDL
+
+getOption("digits")
+options("digits" = 3)
+
+HDL_df %>%
+  pivot_longer(starts_with('HDL (Serum)'),
+               names_to = 'HDL_timepoints',
+               values_to = 'HDL_values') %>%
+  mutate(HDL_values = as.numeric(HDL_values), HDL_timepoints = as.character(HDL_timepoints)) %>%
+  ggplot(aes(x = factor(HDL_timepoints, level = c("HDL (Serum)_0M_lab", "HDL (Serum)_6M_lab", "HDL (Serum)_12M_lab", "HDL (Serum)_18M_lab", "HDL (Serum)_24M_lab")), y = HDL_values)) +
+  geom_boxplot() +
+  ylab('HDL values') +
+  theme_classic() +
+    theme(axis.text.y = element_text(size = 12, face = "bold"),
+          axis.text.x = element_text(size = 12, face = "bold"),
+          axis.title.y = element_text(size = 14, face = "bold"),
+          axis.title.x = element_blank(),
+          legend.position = "none") +
+  scale_x_discrete(labels=c("HDL (Serum)_0M_lab" = "0M", "HDL (Serum)_6M_lab" = "6M", "HDL (Serum)_12M_lab" = "12M", "HDL (Serum)_18M_lab" = "18M", "HDL (Serum)_24M_lab" = "24M"))
+```
+
+```{r}
+# Create a linear model for HDL
+
+HDL_df %>%
+  pivot_longer(starts_with('HDL (Serum)'),
+               names_to = 'HDL_timepoints',
+               values_to = 'HDL_values') %>%
+  mutate(HDL_values = as.numeric(HDL_values), HDL_timepoints = as.character(HDL_timepoints)) %>%
+  mutate(timepoints = case_when(HDL_timepoints == "HDL (Serum)_0M_lab" ~ 0,
+                                HDL_timepoints == "HDL (Serum)_6M_lab" ~ 6,
+                               HDL_timepoints == "HDL (Serum)_12M_lab" ~ 12,
+                               HDL_timepoints == "HDL (Serum)_18M_lab" ~ 18,
+                               HDL_timepoints == "HDL (Serum)_24M_lab" ~ 24)) %>%
+  ggplot(aes(x = timepoints, y = HDL_values, group = 1)) +
+  geom_jitter(widq = 0.5) +
+  # width of the rectangles are set to 0.5
+  geom_smooth(method=lm , color="red", fill="#69b3a2", se=TRUE) +
+  ylab('HDL values') +
+  xlab('Months') +
+  theme_classic() +
+      theme(axis.text.y = element_text(size = 12, face = "bold"),
+          axis.text.x = element_text(size = 12, face = "bold"),
+          axis.title.y = element_text(size = 14, face = "bold"),
+          #axis.title.x = element_blank(),
+          legend.position = "none") +
+  scale_x_continuous(breaks=seq(0, 24, 6))
+```
+
+```{r}
+# Creates a data frame that contains variables of interest: timepoints & HDL values
+
+HDL_lm_df <- HDL_df %>%
+  pivot_longer(starts_with('HDL (Serum)'),
+               names_to = 'HDL_timepoints',
+               values_to = 'HDL_values') %>%
+  mutate(HDL_values = as.numeric(HDL_values), HDL_timepoints = as.character(HDL_timepoints)) %>%
+  mutate(timepoints = case_when(HDL_timepoints == "HDL (Serum)_0M_lab" ~ 0,
+                                HDL_timepoints == "HDL (Serum)_6M_lab" ~ 6,
+                               HDL_timepoints == "HDL (Serum)_12M_lab" ~ 12,
+                               HDL_timepoints == "HDL (Serum)_18M_lab" ~ 18,
+                               HDL_timepoints == "HDL (Serum)_24M_lab" ~ 24))
+```
+
+```{r}
+# Use new data frame to create a linear model (lm)
+
+HDL_lm <- lm(HDL_values ~ timepoints, data = HDL_lm_df)
+
+summary(HDL_lm)
+```
+
+```{r}
+
+# Let's try this again
+
+getOption("digits")
+options("digits" = 3)
+
+Glucose_plot <- MeLODY_Longitudinal_df %>%
+  select('...1' | starts_with('Glucose (Plasma)')) %>%
+  select(-contains('date')) %>%
+  rename('ID' = '...1') %>%
+  pivot_longer(starts_with('Glucose'),
+               names_to = 'Glucose_timepoints',
+               values_to = 'Glucose_values') %>%
+  mutate(Glucose_values = as.numeric(Glucose_values),Glucose_timepoints = as.character(Glucose_timepoints)) %>%
+  ggplot(aes(x = factor(Glucose_timepoints, levels = c("Glucose (Plasma)_0M_lab","Glucose (Plasma)_6M_lab","Glucose (Plasma)_12M_lab", "Glucose (Plasma)_18M_lab","Glucose (Plasma)_24M_lab")), y = Glucose_values)) +
+  geom_boxplot() +
+  ylab('Glucose values') +
+  theme_classic() +
+  theme(axis.text.y = element_text(size = 12, face = "bold"),
+          axis.text.x = element_text(size = 12, face = "bold"),
+          axis.title.y = element_text(size = 14, face = "bold"),
+          axis.title.x = element_blank(),
+          legend.position = "none") +
+  scale_x_discrete(labels = c("Glucose (Plasma)_0M_lab" = "0M", "Glucose (Plasma)_6M_lab" = "6M", "Glucose (Plasma)_12M_lab" = "12M", "Glucose (Plasma)_18M_lab" = "18M", "Glucose (Plasma)_24M_lab" = "24M"))
+
+Glucose_plot
+
+ggsave(Glucose_plot, filename = '/Users/yubimamiya/Desktop/UMalaya/Glucose_plot.pdf')
+```
+
+```{r}
+# Making a new Glucose data frame
+
+Glucose_med_df <- MeLODY_Longitudinal_df %>%
+  select('...1' | starts_with('Glucose (Plasma)') | contains(c('metformin', 'Simvastatin', 'Paracetamol', 'Amlodipine', 'Gliclazide', 'Perindopril'))) %>%
+  select(-contains(c('date', 'dose'))) %>%
+  rename('ID' = '...1') %>%
+  pivot_longer(starts_with('Glucose (Plasma)'),
+               names_to = 'Glucose_timepoints',
+               values_to = 'Glucose_values') %>%
+  mutate(Glucose_values = as.numeric(Glucose_values), Glucose_timepoints = as.character(Glucose_timepoints)) %>%
+  mutate(timepoints = case_when(Glucose_timepoints == "Glucose (Plasma)_0M_lab" ~ 0,
+                                Glucose_timepoints == "Glucose (Plasma)_6M_lab" ~ 6,
+                               Glucose_timepoints == "Glucose (Plasma)_12M_lab" ~ 12,
+                               Glucose_timepoints == "Glucose (Plasma)_18M_lab" ~ 18,
+                               Glucose_timepoints == "Glucose (Plasma)_24M_lab" ~ 24)) %>%
+  mutate(timepoints = as.factor(timepoints), 
+         perindopril_med_type = as.factor(perindopril_med_type), 
+         gliclazide_med_type = as.factor(gliclazide_med_type),
+         amlodipine_med_type = as.factor(amlodipine_med_type),
+         paracetamol_med_type = as.factor(paracetamol_med_type),
+         simvastatin_med_type = as.factor(simvastatin_med_type),
+         metformin_med_type = as.factor(metformin_med_type)) %>%
+  mutate(timepoints = relevel(timepoints, ref = "0"))
+
+head(Glucose_med_df)
+```
+
+```{r}
+Glucose_med_df %>%
+  select(paracetamol_med_type) %>%
+  unique()
+```
+
+
+```{r}
+# Creating dataframe with biometric measurements and medication
+
+Glucose_paracetamol_lm <- lm(Glucose_values ~ timepoints*paracetamol_med_type + paracetamol_med_type, data = Glucose_med_df)
+
+summary(Glucose_paracetamol_lm)
+# Anova(Glucose_paracetamol_lm, type="III")
+```
+
+```{r}
+Glucose_df %>%
+  mutate(paracetamol_med_type = case_when(paracetamol_med_type == "TRUE" ~ "Yes",
+                                          paracetamol_med_type == "NA" ~ "No")) %>%
+  ggplot(aes(x = timepoints, y = Glucose_values, group = paracetamol_med_type, color = paracetamol_med_type)) +
+  geom_jitter(width = 0.35, alpha = 0.25) +
+  geom_smooth(aes(group = paracetamol_med_type, color = paracetamol_med_type), method=lm) +
+  ylab('Glucose values') +
+  xlab('Months') +
+  theme_classic() +
+      theme(axis.text.y = element_text(size = 12, face = "bold"),
+          axis.text.x = element_text(size = 12, face = "bold"),
+          axis.title.y = element_text(size = 14, face = "bold")) +
+  facet_wrap(~paracetamol_med_type) +
+  scale_color_manual(values = c("#C4961A", "#4E84C4"))
+```
+
+```{r}
+Glucose_df %>%
+  mutate(paracetamol_med_type = case_when(paracetamol_med_type == "TRUE" ~ "Yes",
+                                          paracetamol_med_type == "NA" ~ "No")) %>%
+  ggplot(aes(x = factor(Glucose_timepoints, levels = c("Glucose (Plasma)_0M_lab","Glucose (Plasma)_6M_lab","Glucose (Plasma)_12M_lab", "Glucose (Plasma)_18M_lab","Glucose (Plasma)_24M_lab")), y = Glucose_values, fill = paracetamol_med_type)) +
+  geom_boxplot() +
+  ylab('Glucose values') +
+  theme_classic() +
+  theme(axis.text.y = element_text(size = 12, face = "bold"),
+          axis.text.x = element_text(size = 12, face = "bold"),
+          axis.title.y = element_text(size = 14, face = "bold"),
+          axis.title.x = element_blank(),
+          legend.position = "none") +
+  scale_x_discrete(labels = c("Glucose (Plasma)_0M_lab" = "0M", "Glucose (Plasma)_6M_lab" = "6M", "Glucose (Plasma)_12M_lab" = "12M", "Glucose (Plasma)_18M_lab" = "18M", "Glucose (Plasma)_24M_lab" = "24M")) +
+  facet_wrap(~paracetamol_med_type) +
+  scale_fill_manual(values = c("#C4961A", "#4E84C4"))
+```
+
+```{r}
+medication_usage_df
+```
+
+
+```{r}
+# Number of patients taking  sglt2i_med_class 
+
+medication_usage_df['sglt2i_med_class',]
+```
+

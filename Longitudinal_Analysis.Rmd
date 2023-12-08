@@ -1,0 +1,122 @@
+---
+title: "Longitudinal_Analysis"
+author: "Yubi Mamiya"
+date: "2023-07-16"
+output: html_document
+---
+
+```{r}
+# load installed libraries
+library(tidyverse)
+library(readr)
+library(readxl)
+library(car)
+```
+
+```{r}
+# Import data
+
+MeLODY_Longitudinal_df <- read_csv('/Users/yubimamiya/Downloads/longitudinal.csv')
+
+str(MeLODY_Longitudinal_df)
+MeLODY_Longitudinal_df %>%
+  head(5)
+```
+
+```{r}
+# GLUCOSE ANALYSIS
+
+# Create Glucose dataframe with medication types
+
+Glucose_med_df <- MeLODY_Longitudinal_df %>%
+  select('...1' | starts_with('Glucose (Plasma)') | contains(c('metformin', 'Simvastatin', 'Paracetamol', 'Amlodipine', 'Gliclazide', 'Perindopril', 'Aspirin', 'Atorvastatin', 'Insulatard'))) %>%
+  select(-contains(c('date', 'dose'))) %>%
+  rename('ID' = '...1') %>%
+  pivot_longer(starts_with('Glucose (Plasma)'),
+               names_to = 'Glucose_timepoints',
+               values_to = 'Glucose_values') %>%
+  mutate(Glucose_values = as.numeric(Glucose_values), Glucose_timepoints = as.character(Glucose_timepoints)) %>%
+  mutate(timepoints = case_when(Glucose_timepoints == "Glucose (Plasma)_0M_lab" ~ 0,
+                                Glucose_timepoints == "Glucose (Plasma)_6M_lab" ~ 6,
+                               Glucose_timepoints == "Glucose (Plasma)_12M_lab" ~ 12,
+                               Glucose_timepoints == "Glucose (Plasma)_18M_lab" ~ 18,
+                               Glucose_timepoints == "Glucose (Plasma)_24M_lab" ~ 24)) %>%
+  mutate(timepoints = as.factor(timepoints), 
+         metformin_med_type = as.factor(perindopril_med_type), 
+         simvastatin_med_type = as.factor(gliclazide_med_type),
+         paracetamol_med_type = as.factor(amlodipine_med_type),
+         amlodipine_med_type = as.factor(paracetamol_med_type),
+         gliclazide_med_type = as.factor(simvastatin_med_type),
+         perindopril_med_type = as.factor(metformin_med_type),
+         aspirin_med_type = as.factor(metformin_med_type), 
+         atorvastatin_med_type = as.factor(metformin_med_type), 
+         insulatard_med_type = as.factor(metformin_med_type)) %>%
+  mutate(timepoints = relevel(timepoints, ref = "0")) %>%
+  # Convert TRUE to Yes for all medications
+  mutate(metformin_med_type = if_else(metformin_med_type == "TRUE", "Yes", "No")) %>%
+  mutate(simvastatin_med_type = if_else(simvastatin_med_type == "TRUE", "Yes", "No")) %>%
+  mutate(paracetamol_med_type = if_else(paracetamol_med_type == "TRUE", "Yes", "No")) %>%
+  mutate(amlodipine_med_type = if_else(amlodipine_med_type == "TRUE", "Yes", "No")) %>%
+  mutate(gliclazide_med_type = if_else(gliclazide_med_type == "TRUE", "Yes", "No")) %>%
+  mutate(perindopril_med_type = if_else(perindopril_med_type == "TRUE", "Yes", "No")) %>%
+  mutate(aspirin_med_type = if_else(aspirin_med_type == "TRUE", "Yes", "No")) %>%
+  mutate(atorvastatin_med_type = if_else(atorvastatin_med_type == "TRUE", "Yes", "No")) %>%
+  mutate(insulatard_med_type = if_else(insulatard_med_type == "TRUE", "Yes", "No"))
+  
+# Convert NA to No for all medications
+Glucose_med_df$metformin_med_type <- Glucose_med_df$metformin_med_type %>% replace_na("No")
+Glucose_med_df$simvastatin_med_type <- Glucose_med_df$simvastatin_med_type %>% replace_na("No")
+Glucose_med_df$paracetamol_med_type <- Glucose_med_df$paracetamol_med_type %>% replace_na("No")
+Glucose_med_df$amlodipine_med_type <- Glucose_med_df$amlodipine_med_type %>% replace_na("No")
+Glucose_med_df$gliclazide_med_type <- Glucose_med_df$gliclazide_med_type %>% replace_na("No")
+Glucose_med_df$perindopril_med_type <- Glucose_med_df$perindopril_med_type %>% replace_na("No")
+Glucose_med_df$aspirin_med_type <- Glucose_med_df$aspirin_med_type %>% replace_na("No")
+Glucose_med_df$atorvastatin_med_type <- Glucose_med_df$atorvastatin_med_type %>% replace_na("No")
+Glucose_med_df$insulatard_med_type <- Glucose_med_df$insulatard_med_type %>% replace_na("No")
+
+head(Glucose_med_df)
+Glucose_med_df
+```
+
+```{r}
+# Create Glucose linear model with paracetamol
+
+Glucose_paracetamol_lm <- lm(Glucose_values ~ timepoints*paracetamol_med_type + paracetamol_med_type, data = Glucose_med_df)
+
+summary(Glucose_paracetamol_lm)
+Anova(Glucose_paracetamol_lm, type="III")
+```
+
+```{r}
+Glucose_med_df %>%
+  ggplot(aes(x = timepoints, y = Glucose_values, group = paracetamol_med_type, color = paracetamol_med_type)) +
+  geom_jitter(width = 0.35, alpha = 0.25) +
+  geom_smooth(aes(group = paracetamol_med_type, color = paracetamol_med_type), method=lm) +
+  ylab('Glucose values') +
+  xlab('Months') +
+  theme_classic() +
+      theme(axis.text.y = element_text(size = 12, face = "bold"),
+          axis.text.x = element_text(size = 12, face = "bold"),
+          axis.title.y = element_text(size = 14, face = "bold")) +
+  facet_wrap(~paracetamol_med_type) +
+  scale_color_manual(values = c("#C4961A", "#4E84C4"))
+```
+
+```{r}
+Glucose_med_df %>%
+  ggplot(aes(x = factor(Glucose_timepoints, levels = c("Glucose (Plasma)_0M_lab","Glucose (Plasma)_6M_lab","Glucose (Plasma)_12M_lab",
+                                                       "Glucose (Plasma)_18M_lab","Glucose (Plasma)_24M_lab")), y = Glucose_values, fill = paracetamol_med_type)) +
+  geom_boxplot() +
+  ylab('Glucose values') +
+  theme_classic() +
+  theme(axis.text.y = element_text(size = 12, face = "bold"),
+          axis.text.x = element_text(size = 12, face = "bold"),
+          axis.title.y = element_text(size = 14, face = "bold"),
+          axis.title.x = element_blank(),
+          legend.position = "none") +
+  scale_x_discrete(labels = c("Glucose (Plasma)_0M_lab" = "0M", "Glucose (Plasma)_6M_lab" = "6M", "Glucose (Plasma)_12M_lab" = "12M",
+                              "Glucose (Plasma)_18M_lab" = "18M", "Glucose (Plasma)_24M_lab" = "24M")) +
+  facet_wrap(~paracetamol_med_type) +
+  scale_fill_manual(values = c("#C4961A", "#4E84C4"))
+```
+

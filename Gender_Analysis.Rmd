@@ -1,0 +1,381 @@
+---
+title: "Gender_Analysis"
+author: "Yubi Mamiya"
+date: "2023-07-19"
+output: html_document
+---
+
+```{r}
+# libraries
+library(tidyverse)
+library(readr)
+library(readxl)
+library(car)
+```
+
+```{r}
+# Import data
+
+MeLODY_Longitudinal_Masterfile_df <- read.csv('/Users/yubimamiya/Downloads/MeLODY/MeLODY_masterfile_01.csv')
+
+str(MeLODY_Longitudinal_Masterfile_df)
+MeLODY_Longitudinal_Masterfile_df %>%
+  head(5)
+
+MeLODY_df <- read_csv('/Users/yubimamiya/Desktop/UMalaya/MeLODY_UMalaya_Data.csv')
+```
+
+```{r}
+# Create ID Column
+# only need to run this once
+
+MeLODY_Longitudinal_Masterfile_df <- rowid_to_column(MeLODY_Longitudinal_Masterfile_df, "ID")
+
+# What is the column X?
+```
+
+```{r}
+MeLODY_Longitudinal_Masterfile_df
+```
+
+
+```{r}
+# Find the final valid glucose value for each patient
+
+final_glucose_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select("ID" | starts_with('Glucose..Plasma.')) %>%
+  select(-contains(c('date', 'dose'))) %>%
+  pivot_longer(starts_with('Glucose..Plasma.'),
+               names_to = 'Glucose_timepoints',
+               values_to = 'Glucose_values') %>%
+  mutate(Glucose_values = as.numeric(Glucose_values), Glucose_timepoints = as.character(Glucose_timepoints)) %>%
+  group_by(ID) %>%
+  filter(!is.na(Glucose_values)) %>%
+  summarise_all(last)
+```
+
+```{r}
+# Check dataframe
+
+final_glucose_df
+```
+
+```{r}
+# Create dataframe for analysis
+# I removed medications from this dataframe
+
+glucose_stats_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select("ID" | starts_with('Glucose..Plasma.') | sex) %>%
+  select(-contains(c('date', 'dose'))) %>%
+  # why do you want to convert ID from int into double?
+  mutate(ID = as.double(ID)) %>%
+  inner_join(final_glucose_df, by = "ID") %>%
+  rename(final_glucose_df = Glucose_values) %>%
+  mutate(binary_glucose_index = if_else(final_glucose_df >6, "No", "Yes"))
+```
+
+```{r}
+# Check dataframe
+
+glucose_stats_df
+```
+
+```{r}
+# Compute the glucose success ratio for men and women separately.
+
+glucose_stats_df %>%
+  group_by(sex, binary_glucose_index) %>%
+  summarise(N = n()) %>%
+  mutate(Ratio = round(N/sum(N), 2))
+```
+
+
+```{r}
+# Set computation equal to table
+
+glucose_summary = glucose_stats_df %>%
+  group_by(sex, binary_glucose_index) %>%
+  summarise(N = n()) %>%
+  mutate(Ratio = round(N/sum(N), 2))
+```
+
+```{r}
+glucose_summary$Ratio
+
+chisq.test(glucose_summary$Ratio) 
+```
+
+
+```{r}
+# Check age
+
+MeLODY_Longitudinal_Masterfile_df$age
+```
+
+
+```{r}
+# Find the final valid HbA1C value for each patient
+
+final_HBA1C_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select("ID" | starts_with('HBA1C')) %>%
+  select(-contains(c('date', 'dose'))) %>%
+  pivot_longer(starts_with('HBA1C'),
+               names_to = 'HBA1C_timepoints',
+               values_to = 'HBA1C_values') %>%
+  mutate(HBA1C_values = as.numeric(HBA1C_values), HBA1C_timepoints = as.character(HBA1C_timepoints)) %>%
+  group_by(ID) %>%
+  filter(!is.na(HBA1C_values)) %>%
+  summarise_all(last)
+```
+
+```{r}
+# Check dataframe
+
+final_HBA1C_df
+```
+
+```{r}
+# Create dataframe for analysis
+# I removed medications from this dataframe
+# 2 different thresholds based on age
+
+HBA1C_stats_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select("ID" | starts_with('HBA1C') | sex | age) %>%
+  select(-contains(c('date', 'dose', 'IFCC', 'NGSP'))) %>%
+  mutate(ID = as.double(ID)) %>%
+  inner_join(final_HBA1C_df, by = "ID") %>%
+  rename(final_HBA1C_df = HBA1C_values) %>%
+  # 65 years old is 23725 years old
+  mutate(binary_HBA1C_index = if_else(age > 23725, if_else(final_HBA1C_df > 8, "No", "Yes"), if_else(final_HBA1C_df > 7, "No", "Yes"))) %>%
+  filter(!is.na(binary_HBA1C_index))
+```
+
+```{r}
+# Check dataframe
+
+HBA1C_stats_df
+```
+
+```{r}
+# Compute the HBA1C success ratio by gender
+
+HBA1C_stats_df %>%
+  group_by(sex, binary_HBA1C_index) %>%
+  summarise(N = n()) %>%
+  mutate(Ratio = round(N/sum(N), 2))
+```
+
+
+```{r}
+# Determine significance of results
+
+chisq.test(HBA1C_stats_df$Ratio) 
+```
+
+
+```{r}
+# Find the final valid sbp value for each patient
+
+final_sbp_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select("ID" | starts_with('sbp')) %>%
+  select(-contains(c('date'))) %>%
+  pivot_longer(starts_with('sbp'),
+               names_to = 'sbp_timepoints',
+               values_to = 'sbp_values') %>%
+  mutate(sbp_values = as.numeric(sbp_values), sbp_timepoints = as.character(sbp_timepoints)) %>%
+  group_by(ID) %>%
+  filter(!is.na(sbp_values)) %>%
+  summarise_all(last)
+```
+
+```{r}
+# Check dataframe
+
+final_sbp_df
+```
+
+
+```{r}
+# Create dataframe for systolic blood pressure analysis with final values
+
+sbp_stats_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select("ID" | starts_with('sbp') | sex) %>%
+  select(-contains(c('date'))) %>%
+  mutate(ID = as.double(ID)) %>%
+  inner_join(final_sbp_df, by = "ID") %>%
+  rename(final_sbp_df = sbp_values) %>%
+  mutate(binary_sbp_index = if_else(final_sbp_df < 130, "Yes", "No"))
+```
+
+```{r}
+# Check dataframe
+
+sbp_stats_df
+```
+
+```{r}
+# Compute the sbp target success ratio by gender
+
+sbp_stats_df %>%
+  group_by(sex, binary_sbp_index) %>%
+  summarise(N = n()) %>%
+  mutate(Ratio = round(N/sum(N), 2))
+```
+
+```{r}
+# Create dataframe for diastolic blood pressure analysis with final values
+
+final_dbp_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select("ID" | starts_with('dbp')) %>%
+  select(-contains(c('date'))) %>%
+  pivot_longer(starts_with('dbp'),
+               names_to = 'dbp_timepoints',
+               values_to = 'dbp_values') %>%
+  mutate(dbp_values = as.numeric(dbp_values), dbp_timepoints = as.character(dbp_timepoints)) %>%
+  group_by(ID) %>%
+  filter(!is.na(dbp_values)) %>%
+  summarise_all(last)
+```
+
+```{r}
+# Create dataframe for diastolic blood pressure analysis with final values
+# Threshold is 80
+
+dbp_stats_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select("ID" | starts_with('dbp') | sex) %>%
+  select(-contains(c('date'))) %>%
+  mutate(ID = as.double(ID)) %>%
+  inner_join(final_dbp_df, by = "ID") %>%
+  rename(final_dbp_df = dbp_values) %>%
+  mutate(binary_dbp_index = if_else(final_dbp_df < 80, "Yes", "No"))
+```
+
+```{r}
+# Compute the dbp target success ratio by gender
+
+dbp_stats_df %>%
+  group_by(sex, binary_dbp_index) %>%
+  summarise(N = n()) %>%
+  mutate(Ratio = round(N/sum(N), 2))
+```
+
+```{r}
+# Set table equal to results
+
+dbp_summary = dbp_stats_df %>%
+  group_by(sex, binary_dbp_index) %>%
+  summarise(N = n()) %>%
+  mutate(Ratio = round(N/sum(N), 2))
+```
+
+
+```{r}
+# Compute significance
+
+chisq.test(dbp_summary$Ratio) 
+```
+
+
+```{r}
+# Create dataframe for LDL analysis with final values
+
+final_LDL_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select("ID" | starts_with('LDL..Serum.')) %>%
+  select(-contains(c('date'))) %>%
+  pivot_longer(starts_with('LDL..Serum.'),
+               names_to = 'LDL_timepoints',
+               values_to = 'LDL_values') %>%
+  mutate(LDL_values = as.numeric(LDL_values), LDL_timepoints = as.character(LDL_timepoints)) %>%
+  group_by(ID) %>%
+  filter(!is.na(LDL_values)) %>%
+  summarise_all(last)
+```
+
+```{r}
+# Create dataframe for LDL analysis with final values
+# Threshold is 1.8
+
+LDL_stats_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select("ID" | starts_with('LDL..Serum.') | sex) %>%
+  select(-contains(c('date'))) %>%
+  mutate(ID = as.double(ID)) %>%
+  inner_join(final_LDL_df, by = "ID") %>%
+  rename(final_LDL_df = LDL_values) %>%
+  mutate(binary_LDL_index = if_else(final_LDL_df < 1.8, "Yes", "No"))
+```
+
+```{r}
+# Check dataframe
+
+LDL_stats_df
+```
+
+```{r}
+# Compute the LDL target success ratio by gender
+
+LDL_stats_df %>%
+  group_by(sex, binary_LDL_index) %>%
+  summarise(N = n()) %>%
+  mutate(Ratio = round(N/sum(N), 2))
+```
+
+```{r}
+LDL_stats_df %>%
+  group_by(sex, binary_LDL_index) %>%
+  summarise(N = n()) %>%
+  mutate(Ratio = round(N/sum(N), 2)) %>%
+  filter(binary_LDL_index == "Yes")
+```
+
+
+```{r}
+# Set table equal to results
+
+LDL_summary = LDL_stats_df %>%
+  group_by(sex, binary_LDL_index) %>%
+  summarise(N = n()) %>%
+  mutate(Ratio = round(N/sum(N), 2)) %>%
+  filter(binary_LDL_index == "Yes")
+```
+
+
+```{r}
+chisq.test(LDL_summary$Ratio) 
+```
+
+
+```{r}
+# Create dataframe for LDL analysis with higher threshold
+# Threshold is 2.6
+
+LDL_higher_stats_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select("ID" | starts_with('LDL..Serum.') | sex) %>%
+  select(-contains(c('date'))) %>%
+  mutate(ID = as.double(ID)) %>%
+  inner_join(final_LDL_df, by = "ID") %>%
+  rename(final_LDL_df = LDL_values) %>%
+  mutate(binary_LDL_index = if_else(final_LDL_df < 2.6, "Yes", "No"))
+```
+
+```{r}
+# Compute the LDL target success ratio by gender for the higher threshold
+
+LDL_higher_stats_df %>%
+  group_by(sex, binary_LDL_index) %>%
+  summarise(N = n()) %>%
+  mutate(Ratio = round(N/sum(N), 2))
+```
+
+```{r}
+
+LDL_higher_summary = LDL_stats_df %>%
+  group_by(sex, binary_LDL_index) %>%
+  summarise(N = n()) %>%
+  mutate(Ratio = round(N/sum(N), 2))
+```
+
+```{r}
+chisq.test(LDL_higher_summary$Ratio) 
+
+```
+

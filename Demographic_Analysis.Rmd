@@ -1,0 +1,208 @@
+---
+title: "Demographic_Analysis"
+author: "Yubi Mamiya"
+date: "2023-07-17"
+output: html_document
+---
+
+```{r}
+# libraries
+library(tidyverse)
+library(readr)
+library(readxl)
+library(car)
+```
+
+```{r}
+# Import data
+
+MeLODY_Longitudinal_Masterfile_df <- read.csv('/Users/yubimamiya/Downloads/MeLODY/MeLODY_masterfile_01.csv')
+
+str(MeLODY_Longitudinal_Masterfile_df)
+MeLODY_Longitudinal_Masterfile_df %>%
+  head(5)
+
+MeLODY_df <- read_csv('/Users/yubimamiya/Desktop/UMalaya/MeLODY_UMalaya_Data.csv')
+```
+
+```{r}
+# Calculate age
+MeLODY_Longitudinal_Masterfile_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  mutate(time_date_entry = parse_date_time(date_entry, "dmy"), time_date_birth = parse_date_time(date_birth, "dmy")) %>%
+  mutate(age = difftime(time_date_entry, time_date_birth, units = "days"))
+
+MeLODY_Longitudinal_Masterfile_df
+```
+
+```{r}
+# Create column for onset: Early or Late
+# 40 years old is 14600 days
+
+MeLODY_Longitudinal_Masterfile_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  mutate(onset_status = if_else(age < 14600, "Early", "Late"))
+
+MeLODY_Longitudinal_Masterfile_df
+```
+
+```{r}
+MeLODY_Longitudinal_Masterfile_df %>%
+  count()
+
+# n = 17039
+```
+
+
+```{r}
+MeLODY_Longitudinal_Masterfile_df$onset_status
+```
+
+
+```{r}
+# Create dataframe with pertinent information to analyze predictive factors of onset
+
+onset_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select(onset_status, age, contains(c('Glucose..Plasma._0M_lab', 'HBA1C_0M_lab', 'dbp_0M', 'sbp_0M', 'HDL..Serum._0M_lab', 'LDL..Serum._0M_lab', 'Triglyceride..Serum._0M_lab'))) %>%
+  select(-contains(c('date', 'IFCC', 'NGSP'))) %>%
+  rename(Glucose_0M = 'Glucose..Plasma._0M_lab', HBA1C_0M = 'HBA1C_0M_lab', HDL_0M = 'HDL..Serum._0M_lab', LDL_0M = 'LDL..Serum._0M_lab', Trigycleride_0M = 'Triglyceride..Serum._0M_lab') %>%
+  mutate(Glucose_0M = as.numeric(Glucose_0M), HBA1C_0M = as.numeric(HBA1C_0M), HDL_0M = as.numeric(HDL_0M), LDL_0M = as.numeric(LDL_0M), Trigycleride_0M = as.numeric(Trigycleride_0M), onset_status = as.factor(onset_status), dbp_0M = as.numeric(dbp_0M), sbp_0M = as.numeric(sbp_0M))
+```
+
+```{r}
+onset_df <- onset_df %>%
+  filter(onset_status == "Early" | onset_status == "Late")
+```
+
+```{r}
+onset_df
+```
+
+
+```{r}
+# Create linear model with HbA1C as a predictive factor
+
+HBA1C_onset_df <- onset_df %>%
+  filter(!is.na(HBA1C_0M)) %>%
+  filter(!is.na(age))
+
+HBA1C_onset_lm <- glm(onset_status~HBA1C_0M, family="binomial", data=HBA1C_onset_df)
+summary(HBA1C_onset_lm)
+```
+
+
+```{r}
+HBA1C_onset_df %>%
+  count()
+
+# n = 3941
+```
+
+```{r}
+HBA1C_onset_df
+```
+
+
+```{r}
+multifactor_onset_df <- onset_df %>%
+  filter(!is.na(dbp_0M)) %>%
+  filter(!is.na(sbp_0M)) %>%
+  filter(!is.na(onset_status)) %>%
+  filter(!is.na(HDL_0M)) %>%
+  filter(!is.na(LDL_0M)) %>%
+  filter(!is.na(Glucose_0M)) %>%
+  filter(!is.na(Trigycleride_0M))
+```
+
+```{r}
+multifactor_onset_df %>%
+  count()
+
+# n = 1181
+```
+
+
+```{r}
+# Create linear model with blood pressure, glucose, and cholesterol as predictive factors
+
+multifactor_onset_lm <- glm(onset_status~dbp_0M+sbp_0M+HDL_0M+LDL_0M+Glucose_0M+Trigycleride_0M, family="binomial", data=multifactor_onset_df)
+summary(multifactor_onset_lm)
+```
+
+```{r}
+# Graph the linear model for LDL
+
+onset_LDL_plot <- ggplot( data = onset_df, aes(y = LDL_0M, x = onset_status)) +
+                       geom_boxplot() +
+                      theme_bw() +
+                      ylab('LDL Baseline Values') +
+                     xlab('Onset') +
+                     theme_classic() +
+                    theme(axis.text.y = element_text(size = 14, face = "bold"),
+                       axis.text.x = element_text(size = 14, face = "bold"),
+                       axis.title.y = element_text(size = 14, face = "bold"),
+                      axis.title.x = element_text(size = 14, face = "bold"),
+                      legend.position = "none")
+
+ggsave(filename = 'onset_LDL_plot.pdf')
+```
+
+```{r}
+# Graph the linear model for SBP
+
+onset_sbp_plot <- ggplot( data = onset_df, aes(y = sbp_0M, x = onset_status)) +
+                       geom_boxplot() +
+                      theme_bw() +
+                      ylab('Systolic Blood Pressure Baseline Values') +
+                     xlab('Onset') +
+                     theme_classic() +
+                    theme(axis.text.y = element_text(size = 14, face = "bold"),
+                       axis.text.x = element_text(size = 14, face = "bold"),
+                       axis.title.y = element_text(size = 14, face = "bold"),
+                      axis.title.x = element_text(size = 14, face = "bold"),
+                      legend.position = "none")
+
+ggsave(filename = 'onset_sbp_plot.pdf')
+```
+
+```{r}
+onset_df <- onset_df %>%
+  filter(dbp_0M < 250)
+```
+
+
+```{r}
+# Graph the linear model for DBP
+
+onset_dbp_plot <- ggplot( data = onset_df, aes(y = dbp_0M, x = onset_status)) +
+                       geom_boxplot() +
+                      theme_bw() +
+                      ylab('Diastolic Blood Pressure Baseline Values') +
+                     xlab('Onset') +
+                     theme_classic() +
+                    theme(axis.text.y = element_text(size = 14, face = "bold"),
+                       axis.text.x = element_text(size = 14, face = "bold"),
+                       axis.title.y = element_text(size = 14, face = "bold"),
+                      axis.title.x = element_text(size = 14, face = "bold"),
+                      legend.position = "none")
+
+ggsave(filename = 'onset_dbp_plot.pdf')
+```
+
+
+```{r}
+# Graph the linear model for HbA1C
+
+onset_HBA1C_plot <- ggplot( data = HBA1C_onset_df, aes(y = HBA1C_0M, x = onset_status)) +
+                       geom_boxplot() +
+                      theme_bw() +
+                      ylab('HbA1C Baseline Values') +
+                     xlab('Onset') +
+                     theme_classic() +
+                    theme(axis.text.y = element_text(size = 14, face = "bold"),
+                       axis.text.x = element_text(size = 14, face = "bold"),
+                       axis.title.y = element_text(size = 14, face = "bold"),
+                      axis.title.x = element_text(size = 14, face = "bold"),
+                      legend.position = "none")
+
+ggsave(filename = 'onset_HBA1C_plot.pdf')
+```
+

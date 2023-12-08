@@ -1,0 +1,229 @@
+---
+title: "Guideline_Analysis"
+author: "Yubi Mamiya"
+date: "2023-07-23"
+output: html_document
+---
+
+```{r}
+# libraries
+library(tidyverse)
+library(readr)
+library(readxl)
+library(car)
+```
+
+```{r}
+# Import data
+
+MeLODY_Longitudinal_Masterfile_df <- read.csv('/Users/yubimamiya/Downloads/MeLODY/MeLODY_masterfile_01.csv')
+
+str(MeLODY_Longitudinal_Masterfile_df)
+MeLODY_Longitudinal_Masterfile_df %>%
+  head(5)
+
+MeLODY_df <- read_csv('/Users/yubimamiya/Desktop/UMalaya/MeLODY_UMalaya_Data.csv')
+```
+
+```{r}
+MeLODY_Longitudinal_Masterfile_df
+```
+
+
+```{r}
+# Calculate suggested statin dosage intensity
+
+# Error: `statin_intensity` must be size 17039 or 1, not 0.
+
+MeLODY_Longitudinal_Masterfile_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  mutate(statin_intensity = if_else(LDL..Serum._0M_lab >= 3.6, "High", if_else(LDL..Serum._0M_lab >= 2.57, "Moderate", "Low")))
+
+MeLODY_Longitudinal_Masterfile_df
+```
+
+```{r}
+MeLODY_Longitudinal_Masterfile_df$statin_intensity
+```
+
+
+```{r}
+# Sanity checks on medications
+# There are some combination therapies that invoke both statins, so which statin is the dosage for?
+
+MeLODY_Longitudinal_Masterfile_df$simvastatin_med_type
+MeLODY_Longitudinal_Masterfile_df$atorvastatin_med_type
+
+# There is only one listed statin dose
+MeLODY_Longitudinal_Masterfile_df$statin_med_class_initial_dose
+```
+
+
+```{r}
+# Determine intensity of statin
+
+statin_evaluation_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select(statin_med_class_initial_dose, statin_med_class, simvastatin_med_type, atorvastatin_med_type, LDL..Serum._0M_lab, sex, race) %>%
+  mutate(statin_med_class_initial_dose = as.numeric(statin_med_class_initial_dose)) %>%
+  mutate(intensity = ifelse(statin_med_class_initial_dose >= 40 & atorvastatin_med_type == "TRUE", "High",
+                            ifelse(statin_med_class_initial_dose >= 20 & simvastatin_med_type == "TRUE", "Moderate",
+                                   ifelse(statin_med_class_initial_dose <= 20 & atorvastatin_med_type == "TRUE", "Moderate", "Low"))))
+
+statin_evaluation_df
+```
+
+```{r}
+# Determine correct statin intensity requirement
+
+statin_evaluation_df <- statin_evaluation_df %>%
+  mutate(statin_requirement = ifelse(LDL..Serum._0M_lab >= 3.6, "High",
+                            ifelse(LDL..Serum._0M_lab >= 2.57, "Moderate", "Low")))
+
+statin_evaluation_df
+```
+
+```{r}
+# Determine whether the correct statin intensity was prescribed
+# Agree is 1
+# Disagree is 0
+
+statin_evaluation_df <- statin_evaluation_df %>%
+  mutate(statin_agreement = ifelse(intensity == statin_requirement, 1, 0)) %>%
+  filter(!is.na(statin_agreement))
+
+statin_evaluation_df
+
+statin_evaluation_df %>%
+  count()
+
+# n = 1148
+```
+
+```{r}
+sum(statin_evaluation_df$statin_agreement)
+
+# sum = 658
+```
+
+
+```{r}
+# Compare agreement by gender (female)
+
+female_statin_evaluation_df <- statin_evaluation_df %>%
+  filter(sex == "F")
+
+female_statin_evaluation_df %>%
+  count()
+
+# n = 508
+
+sum(female_statin_evaluation_df$statin_agreement)
+
+# sum = 191
+```
+
+```{r}
+# Compare agreement by gender (male)
+
+male_statin_evaluation_df <- statin_evaluation_df %>%
+  filter(sex == "M")
+
+male_statin_evaluation_df %>%
+  count()
+
+# n = 640
+
+sum(male_statin_evaluation_df$statin_agreement)
+
+# sum = 236
+```
+
+```{r}
+# Compare agreement by ethnicity (Melayu)
+
+melayu_statin_evaluation_df <- statin_evaluation_df %>%
+  filter(race == "Melayu")
+
+melayu_statin_evaluation_df %>%
+  count()
+# n = 511
+
+sum(melayu_statin_evaluation_df$statin_agreement)
+# n = 211
+```
+
+```{r}
+# Compare agreement by ethnicity (Chinese)
+
+chinese_statin_evaluation_df <- statin_evaluation_df %>%
+  filter(race == "Chinese")
+
+chinese_statin_evaluation_df %>%
+  count()
+# n = 287
+
+sum(chinese_statin_evaluation_df$statin_agreement)
+# n = 83
+```
+
+```{r}
+# Compare agreement by ethnicity (Indian)
+
+indian_statin_evaluation_df <- statin_evaluation_df %>%
+  filter(race == "Indian")
+
+indian_statin_evaluation_df %>%
+  count()
+# n = 298
+
+sum(indian_statin_evaluation_df$statin_agreement)
+# n = 113
+```
+
+
+```{r}
+# Determine if blood pressure therapies are being prescribed if necessary
+
+# 1: following clinical guidelines
+# 0: not following clinical guidelines
+
+bp_evaluation_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select(acei_med_class, acei_med_class, diuretic_med_class, ccb_med_class, bb_med_class, sex, race, sbp_0M, dbp_0M) %>%
+  filter(sbp_0M >= 130 & dbp_0M >= 80) %>%
+  mutate(bp_management = ifelse(sbp_0M >= 130 & dbp_0M >= 80 & (acei_med_class == "TRUE" | acei_med_class == "TRUE" | diuretic_med_class == "TRUE" | ccb_med_class == "TRUE" | bb_med_class == "TRUE"), 1, 0)) %>%
+  filter(!is.na(bp_management))
+
+bp_evaluation_df
+```
+
+```{r}
+# Compare agreement by gender (female)
+
+female_bp_evaluation_df <- bp_evaluation_df %>%
+  filter(sex == "F")
+
+female_bp_evaluation_df %>%
+  count()
+
+# n = 344
+
+sum(female_bp_evaluation_df$bp_management)
+
+# sum = 344
+```
+
+```{r}
+# Compare agreement by gender (male)
+
+male_bp_evaluation_df <- bp_evaluation_df %>%
+  filter(sex == "M")
+
+male_bp_evaluation_df %>%
+  count()
+
+# n = 461
+
+sum(male_bp_evaluation_df$bp_management)
+
+# sum = 461
+```
+

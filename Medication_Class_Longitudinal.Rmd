@@ -1,0 +1,621 @@
+---
+title: "Medication_Class_Longitudinal"
+author: "Yubi Mamiya"
+date: "2023-07-17"
+output: html_document
+---
+
+```{r}
+# libraries
+library(tidyverse)
+library(readr)
+library(readxl)
+library(car)
+```
+
+```{r}
+# Import data
+
+MeLODY_Longitudinal_df <- read_csv('/Users/yubimamiya/Downloads/longitudinal.csv')
+
+str(MeLODY_Longitudinal_df)
+MeLODY_Longitudinal_df %>%
+  head(5)
+```
+
+```{r}
+# GLUCOSE ANALYSIS
+
+# Create Glucose dataframe with medication classes
+
+Glucose_med_class_df <- MeLODY_Longitudinal_df %>%
+  select('...1' | starts_with('Glucose (Plasma)') | contains(c('statin_med_class', 'biguanide_med_class', 'psychotic_med_class', 'ccb_med_class', 'acei_med_class', 'coaga_med_class', 'su_med_class', 'ins_human_med_class'))) %>%
+  select(-contains(c('date', 'dose'))) %>%
+  rename('ID' = '...1') %>%
+  pivot_longer(starts_with('Glucose (Plasma)'),
+               names_to = 'Glucose_timepoints',
+               values_to = 'Glucose_values') %>%
+  mutate(Glucose_values = as.numeric(Glucose_values), Glucose_timepoints = as.character(Glucose_timepoints)) %>%
+  mutate(timepoints = case_when(Glucose_timepoints == "Glucose (Plasma)_0M_lab" ~ 0,
+                                Glucose_timepoints == "Glucose (Plasma)_6M_lab" ~ 6,
+                               Glucose_timepoints == "Glucose (Plasma)_12M_lab" ~ 12,
+                               Glucose_timepoints == "Glucose (Plasma)_18M_lab" ~ 18,
+                               Glucose_timepoints == "Glucose (Plasma)_24M_lab" ~ 24)) %>%
+  mutate(timepoints = as.factor(timepoints), 
+         statin_med_class = as.factor(statin_med_class), 
+         biguanide_med_class = as.factor(biguanide_med_class),
+         psychotic_med_class = as.factor(psychotic_med_class),
+         ccb_med_class = as.factor(ccb_med_class),
+         acei_med_class = as.factor(acei_med_class),
+         coaga_med_class = as.factor(coaga_med_class),
+         su_med_class = as.factor(su_med_class), 
+         ins_human_med_class = as.factor(ins_human_med_class)) %>%
+  mutate(timepoints = relevel(timepoints, ref = "0")) %>%
+  # Convert TRUE to Yes for all medications
+  mutate(statin_med_class = if_else(statin_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(biguanide_med_class = if_else(biguanide_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(psychotic_med_class = if_else(psychotic_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(ccb_med_class = if_else(ccb_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(acei_med_class = if_else(acei_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(coaga_med_class = if_else(coaga_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(su_med_class = if_else(su_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(ins_human_med_class = if_else(ins_human_med_class == "TRUE", "Yes", "No"))
+
+# Convert NA to No for all medications
+Glucose_med_class_df$statin_med_class <- Glucose_med_class_df$statin_med_class %>% replace_na("No")
+Glucose_med_class_df$biguanide_med_class <- Glucose_med_class_df$biguanide_med_class %>% replace_na("No")
+Glucose_med_class_df$psychotic_med_class <- Glucose_med_class_df$psychotic_med_class %>% replace_na("No")
+Glucose_med_class_df$ccb_med_class <- Glucose_med_class_df$ccb_med_class %>% replace_na("No")
+Glucose_med_class_df$acei_med_class <- Glucose_med_class_df$acei_med_class %>% replace_na("No")
+Glucose_med_class_df$coaga_med_class <- Glucose_med_class_df$coaga_med_class %>% replace_na("No")
+Glucose_med_class_df$su_med_class <- Glucose_med_class_df$su_med_class %>% replace_na("No")
+Glucose_med_class_df$ins_human_med_class <- Glucose_med_class_df$ins_human_med_class %>% replace_na("No")
+
+Glucose_med_class_df
+```
+
+```{r}
+# Create Glucose linear model with statin
+
+Glucose_statin_lm <- lm(Glucose_values ~ timepoints*statin_med_class + statin_med_class, data = Glucose_med_class_df)
+
+summary(Glucose_statin_lm)
+Anova(Glucose_statin_lm, type="III")
+```
+
+```{r}
+Glucose_med_class_df %>%
+  ggplot(aes(x = timepoints, y = Glucose_values, group = statin_med_class, color = statin_med_class)) +
+  geom_jitter(width = 0.35, alpha = 0.25) +
+  geom_smooth(aes(group = statin_med_class, color = statin_med_class), method=lm) +
+  ylab('Glucose values') +
+  xlab('Months') +
+  theme_classic() +
+      theme(axis.text.y = element_text(size = 12, face = "bold"),
+          axis.text.x = element_text(size = 12, face = "bold"),
+          axis.title.y = element_text(size = 14, face = "bold")) +
+  facet_wrap(~statin_med_class) +
+  scale_color_manual(values = c("#C4961A", "#4E84C4"))
+```
+
+```{r}
+# Create Glucose linear model with biguanides
+
+Glucose_biguanide_lm <- lm(Glucose_values ~ timepoints*biguanide_med_class + biguanide_med_class, data = Glucose_med_class_df)
+
+summary(Glucose_biguanide_lm)
+Anova(Glucose_biguanide_lm, type="III")
+```
+
+```{r}
+# Plot linear model for biguanides
+
+Glucose_med_class_df %>%
+  ggplot(aes(x = timepoints, y = Glucose_values, group = biguanide_med_class, color = biguanide_med_class)) +
+  geom_jitter(width = 0.35, alpha = 0.25) +
+  geom_smooth(aes(group = biguanide_med_class, color = biguanide_med_class), method=lm) +
+  ylab('Glucose values') +
+  xlab('Months') +
+  theme_classic() +
+      theme(axis.text.y = element_text(size = 12, face = "bold"),
+          axis.text.x = element_text(size = 12, face = "bold"),
+          axis.title.y = element_text(size = 14, face = "bold")) +
+  facet_wrap(~biguanide_med_class) +
+  scale_color_manual(values = c("#C4961A", "#4E84C4"))
+```
+
+```{r}
+# Create Glucose linear model with ccb_med_class
+
+Glucose_ccb_lm <- lm(Glucose_values ~ timepoints*ccb_med_class + ccb_med_class, data = Glucose_med_class_df)
+
+summary(Glucose_ccb_lm)
+Anova(Glucose_ccb_lm, type="III")
+```
+
+```{r}
+# Plot linear model for ccb
+
+Glucose_med_class_df %>%
+  ggplot(aes(x = timepoints, y = Glucose_values, group = ccb_med_class, color = ccb_med_class)) +
+  geom_jitter(width = 0.35, alpha = 0.25) +
+  geom_smooth(aes(group = ccb_med_class, color = ccb_med_class), method=lm) +
+  ylab('Glucose values') +
+  xlab('Months') +
+  theme_classic() +
+      theme(axis.text.y = element_text(size = 12, face = "bold"),
+          axis.text.x = element_text(size = 12, face = "bold"),
+          axis.title.y = element_text(size = 14, face = "bold")) +
+  facet_wrap(~ccb_med_class) +
+  scale_color_manual(values = c("#C4961A", "#4E84C4"))
+```
+
+```{r}
+# Create Glucose linear model with acei_med_class
+
+Glucose_acei_lm <- lm(Glucose_values ~ timepoints*acei_med_class + acei_med_class, data = Glucose_med_class_df)
+
+summary(Glucose_acei_lm)
+Anova(Glucose_acei_lm, type="III")
+```
+
+```{r}
+# Create Glucose linear model with su_med_class
+
+Glucose_su_lm <- lm(Glucose_values ~ timepoints*su_med_class + su_med_class, data = Glucose_med_class_df)
+
+summary(Glucose_su_lm)
+Anova(Glucose_su_lm, type="III")
+```
+
+```{r}
+# Plot linear model for su_med_class
+
+Glucose_med_class_df %>%
+  ggplot(aes(x = timepoints, y = Glucose_values, group = su_med_class, color = su_med_class)) +
+  geom_jitter(width = 0.35, alpha = 0.25) +
+  geom_smooth(aes(group = su_med_class, color = su_med_class), method=lm) +
+  ylab('Glucose values') +
+  xlab('Months') +
+  theme_classic() +
+      theme(axis.text.y = element_text(size = 12, face = "bold"),
+          axis.text.x = element_text(size = 12, face = "bold"),
+          axis.title.y = element_text(size = 14, face = "bold")) +
+  facet_wrap(~su_med_class) +
+  scale_color_manual(values = c("#C4961A", "#4E84C4"))
+```
+
+```{r}
+# Create Glucose linear model with coaga_med_class
+
+Glucose_coaga_lm <- lm(Glucose_values ~ timepoints*coaga_med_class + coaga_med_class, data = Glucose_med_class_df)
+
+summary(Glucose_coaga_lm)
+Anova(Glucose_coaga_lm, type="III")
+```
+
+
+```{r}
+# Create Glucose linear model with ins_human_med_class
+
+Glucose_ins_human_lm <- lm(Glucose_values ~ timepoints*ins_human_med_class + ins_human_med_class, data = Glucose_med_class_df)
+
+summary(Glucose_ins_human_lm)
+Anova(Glucose_ins_human_lm, type="III")
+```
+
+```{r}
+MeLODY_Longitudinal_df
+```
+
+
+```{r}
+# HbA1C ANALYSIS
+
+# Create HbA1C dataframe with medication classes
+
+HBA1C_med_class_df <- MeLODY_Longitudinal_df %>%
+  select('...1' | starts_with('HBA1C') | contains(c('statin_med_class', 'biguanide_med_class', 'psychotic_med_class', 'ccb_med_class', 'acei_med_class', 'coaga_med_class', 'su_med_class', 'ins_human_med_class'))) %>%
+  rename('ID' = '...1') %>%
+  select(-contains(c('date', 'dose', 'IFCC', 'NGSP'))) %>%
+  pivot_longer(starts_with('HBA1C'),
+               names_to = 'HBA1C_timepoints',
+               values_to = 'HBA1C_values') %>%
+  mutate(HBA1C_values = as.numeric(HBA1C_values), HBA1C_timepoints = as.character(HBA1C_timepoints)) %>%
+  mutate(timepoints = case_when(HBA1C_timepoints == "HBA1C_0M_lab" ~ 0,
+                                HBA1C_timepoints == "HBA1C_6M_lab" ~ 6,
+                               HBA1C_timepoints == "HBA1C_12M_lab" ~ 12,
+                               HBA1C_timepoints == "HBA1C_18M_lab" ~ 18,
+                               HBA1C_timepoints == "HBA1C_24M_lab" ~ 24)) %>%
+  mutate(timepoints = as.factor(timepoints), 
+         statin_med_class = as.factor(statin_med_class), 
+         biguanide_med_class = as.factor(biguanide_med_class),
+         psychotic_med_class = as.factor(psychotic_med_class),
+         ccb_med_class = as.factor(ccb_med_class),
+         acei_med_class = as.factor(acei_med_class),
+         coaga_med_class = as.factor(coaga_med_class),
+         su_med_class = as.factor(su_med_class), 
+         ins_human_med_class = as.factor(ins_human_med_class)) %>%
+  mutate(timepoints = relevel(timepoints, ref = "0")) %>%
+  # Convert TRUE to Yes for all medications
+  mutate(statin_med_class = if_else(statin_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(biguanide_med_class = if_else(biguanide_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(psychotic_med_class = if_else(psychotic_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(ccb_med_class = if_else(ccb_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(acei_med_class = if_else(acei_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(coaga_med_class = if_else(coaga_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(su_med_class = if_else(su_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(ins_human_med_class = if_else(ins_human_med_class == "TRUE", "Yes", "No"))
+
+# Convert NA to No for all medications
+HBA1C_med_class_df$statin_med_class <- HBA1C_med_class_df$statin_med_class %>% replace_na("No")
+HBA1C_med_class_df$biguanide_med_class <- HBA1C_med_class_df$biguanide_med_class %>% replace_na("No")
+HBA1C_med_class_df$psychotic_med_class <- HBA1C_med_class_df$psychotic_med_class %>% replace_na("No")
+HBA1C_med_class_df$ccb_med_class <- HBA1C_med_class_df$ccb_med_class %>% replace_na("No")
+HBA1C_med_class_df$acei_med_class <- HBA1C_med_class_df$acei_med_class %>% replace_na("No")
+HBA1C_med_class_df$coaga_med_class <- HBA1C_med_class_df$coaga_med_class %>% replace_na("No")
+HBA1C_med_class_df$su_med_class <- HBA1C_med_class_df$su_med_class %>% replace_na("No")
+HBA1C_med_class_df$ins_human_med_class <- HBA1C_med_class_df$ins_human_med_class %>% replace_na("No")
+
+HBA1C_med_class_df
+```
+
+```{r}
+# Create HbA1C linear model with statin
+
+HBA1C_statin_lm <- lm(HBA1C_values ~ timepoints*statin_med_class + statin_med_class, data = HBA1C_med_class_df)
+
+summary(HBA1C_statin_lm)
+Anova(HBA1C_statin_lm, type="III")
+```
+
+```{r}
+# Create HbA1C linear model with biguanides
+
+HBA1C_biguanide_lm <- lm(HBA1C_values ~ timepoints*biguanide_med_class + biguanide_med_class, data = HBA1C_med_class_df)
+
+summary(HBA1C_biguanide_lm)
+Anova(HBA1C_biguanide_lm, type="III")
+```
+
+```{r}
+# Plot linear model for biguanides
+
+HBA1C_med_class_df %>%
+  ggplot(aes(x = timepoints, y = HBA1C_values, group = biguanide_med_class, color = biguanide_med_class)) +
+  geom_jitter(width = 0.35, alpha = 0.25) +
+  geom_smooth(aes(group = biguanide_med_class, color = biguanide_med_class), method=lm) +
+  ylab('HbA1C values') +
+  xlab('Months') +
+  theme_classic() +
+      theme(axis.text.y = element_text(size = 12, face = "bold"),
+          axis.text.x = element_text(size = 12, face = "bold"),
+          axis.title.y = element_text(size = 14, face = "bold")) +
+  facet_wrap(~biguanide_med_class) +
+  scale_color_manual(values = c("#C4961A", "#4E84C4"))
+```
+
+
+```{r}
+# Create HbA1C linear model with ccb
+
+HBA1C_ccb_lm <- lm(HBA1C_values ~ timepoints*ccb_med_class + ccb_med_class, data = HBA1C_med_class_df)
+
+summary(HBA1C_ccb_lm)
+Anova(HBA1C_ccb_lm, type="III")
+```
+
+```{r}
+# Create HbA1C linear model with acei
+
+HBA1C_acei_lm <- lm(HBA1C_values ~ timepoints*acei_med_class + acei_med_class, data = HBA1C_med_class_df)
+
+summary(HBA1C_acei_lm)
+Anova(HBA1C_acei_lm, type="III")
+```
+
+```{r}
+# Create HbA1C linear model with su_med_class
+
+HBA1C_su_lm <- lm(HBA1C_values ~ timepoints*su_med_class + su_med_class, data = HBA1C_med_class_df)
+
+summary(HBA1C_su_lm)
+Anova(HBA1C_su_lm, type="III")
+```
+
+```{r}
+# LDL-C ANALYSIS
+
+# Create LDL-C dataframe with medication classes
+
+LDL_med_class_df <- MeLODY_Longitudinal_df %>%
+  select('...1' | starts_with('LDL (Serum)') | contains(c('statin_med_class', 'biguanide_med_class', 'psychotic_med_class', 'ccb_med_class', 'acei_med_class', 'coaga_med_class', 'su_med_class', 'ins_human_med_class'))) %>%
+  rename('ID' = '...1') %>%
+  select(-contains(c('date', 'dose'))) %>%
+  pivot_longer(starts_with('LDL (Serum)'),
+               names_to = 'LDL_timepoints',
+               values_to = 'LDL_values') %>%
+  mutate(LDL_values = as.numeric(LDL_values), LDL_timepoints = as.character(LDL_timepoints)) %>%
+  mutate(timepoints = case_when(LDL_timepoints == "LDL (Serum)_0M_lab" ~ 0,
+                                LDL_timepoints == "LDL (Serum)_6M_lab" ~ 6,
+                               LDL_timepoints == "LDL (Serum)_12M_lab" ~ 12,
+                               LDL_timepoints == "LDL (Serum)_18M_lab" ~ 18,
+                               LDL_timepoints == "LDL (Serum)_24M_lab" ~ 24)) %>%
+  mutate(timepoints = as.factor(timepoints), 
+         statin_med_class = as.factor(statin_med_class), 
+         biguanide_med_class = as.factor(biguanide_med_class),
+         psychotic_med_class = as.factor(psychotic_med_class),
+         ccb_med_class = as.factor(ccb_med_class),
+         acei_med_class = as.factor(acei_med_class),
+         coaga_med_class = as.factor(coaga_med_class),
+         su_med_class = as.factor(su_med_class), 
+         ins_human_med_class = as.factor(ins_human_med_class)) %>%
+  mutate(timepoints = relevel(timepoints, ref = "0")) %>%
+  # Convert TRUE to Yes for all medications
+  mutate(statin_med_class = if_else(statin_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(biguanide_med_class = if_else(biguanide_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(psychotic_med_class = if_else(psychotic_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(ccb_med_class = if_else(ccb_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(acei_med_class = if_else(acei_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(coaga_med_class = if_else(coaga_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(su_med_class = if_else(su_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(ins_human_med_class = if_else(ins_human_med_class == "TRUE", "Yes", "No"))
+
+# Convert NA to No for all medications
+LDL_med_class_df$statin_med_class <- LDL_med_class_df$statin_med_class %>% replace_na("No")
+LDL_med_class_df$biguanide_med_class <- LDL_med_class_df$biguanide_med_class %>% replace_na("No")
+LDL_med_class_df$psychotic_med_class <- LDL_med_class_df$psychotic_med_class %>% replace_na("No")
+LDL_med_class_df$ccb_med_class <- LDL_med_class_df$ccb_med_class %>% replace_na("No")
+LDL_med_class_df$acei_med_class <- LDL_med_class_df$acei_med_class %>% replace_na("No")
+LDL_med_class_df$coaga_med_class <- LDL_med_class_df$coaga_med_class %>% replace_na("No")
+LDL_med_class_df$su_med_class <- LDL_med_class_df$su_med_class %>% replace_na("No")
+LDL_med_class_df$ins_human_med_class <- LDL_med_class_df$ins_human_med_class %>% replace_na("No")
+
+LDL_med_class_df
+```
+
+```{r}
+# Create LDL linear model with statin
+
+LDL_statin_lm <- lm(LDL_values ~ timepoints*statin_med_class + statin_med_class, data = LDL_med_class_df)
+
+summary(LDL_statin_lm)
+Anova(LDL_statin_lm, type="III")
+```
+
+```{r}
+# Plot linear model for statin
+
+LDL_med_class_df %>%
+  ggplot(aes(x = timepoints, y = LDL_values, group = statin_med_class, color = statin_med_class)) +
+  geom_jitter(width = 0.35, alpha = 0.25) +
+  geom_smooth(aes(group = statin_med_class, color = statin_med_class), method=lm) +
+  ylab('LDL-C values') +
+  xlab('Months') +
+  theme_classic() +
+      theme(axis.text.y = element_text(size = 12, face = "bold"),
+          axis.text.x = element_text(size = 12, face = "bold"),
+          axis.title.y = element_text(size = 14, face = "bold")) +
+  facet_wrap(~statin_med_class) +
+  scale_color_manual(values = c("#C4961A", "#4E84C4"))
+```
+
+```{r}
+# Create LDL linear model with biguanides
+
+LDL_biguanide_lm <- lm(LDL_values ~ timepoints*biguanide_med_class + biguanide_med_class, data = LDL_med_class_df)
+
+summary(LDL_biguanide_lm)
+Anova(LDL_biguanide_lm, type="III")
+```
+
+```{r}
+# Plot linear model for biguanides
+
+LDL_med_class_df %>%
+  ggplot(aes(x = timepoints, y = LDL_values, group = biguanide_med_class, color = biguanide_med_class)) +
+  geom_jitter(width = 0.35, alpha = 0.25) +
+  geom_smooth(aes(group = biguanide_med_class, color = biguanide_med_class), method=lm) +
+  ylab('LDL-C values') +
+  xlab('Months') +
+  theme_classic() +
+      theme(axis.text.y = element_text(size = 12, face = "bold"),
+          axis.text.x = element_text(size = 12, face = "bold"),
+          axis.title.y = element_text(size = 14, face = "bold")) +
+  facet_wrap(~biguanide_med_class) +
+  scale_color_manual(values = c("#C4961A", "#4E84C4"))
+```
+
+```{r}
+# Create LDL linear model with ccb
+
+LDL_ccb_lm <- lm(LDL_values ~ timepoints*ccb_med_class + ccb_med_class, data = LDL_med_class_df)
+
+summary(LDL_ccb_lm)
+Anova(LDL_ccb_lm, type="III")
+```
+
+```{r}
+# Create LDL linear model with acei
+
+LDL_acei_lm <- lm(LDL_values ~ timepoints*acei_med_class + acei_med_class, data = LDL_med_class_df)
+
+summary(LDL_acei_lm)
+Anova(LDL_acei_lm, type="III")
+```
+
+```{r}
+
+# Create LDL linear model with coaga_med_class
+
+LDL_coaga_lm <- lm(LDL_values ~ timepoints*coaga_med_class + coaga_med_class, data = LDL_med_class_df)
+
+summary(LDL_coaga_lm)
+Anova(LDL_coaga_lm, type="III")
+```
+
+```{r}
+# Create LDL linear model with su_med_class
+
+LDL_su_lm <- lm(LDL_values ~ timepoints*su_med_class + su_med_class, data = LDL_med_class_df)
+
+summary(LDL_su_lm)
+Anova(LDL_su_lm, type="III")
+```
+
+```{r}
+# Systolic Blood Pressure ANALYSIS
+
+# Create SBP dataframe with medication classes
+
+sbp_med_class_df <- MeLODY_Longitudinal_df %>%
+  select('...1' | starts_with('sbp') | contains(c('statin_med_class', 'biguanide_med_class', 'psychotic_med_class', 'ccb_med_class', 'acei_med_class', 'coaga_med_class', 'su_med_class', 'ins_human_med_class'))) %>%
+  rename('ID' = '...1') %>%
+  select(-contains(c('date', 'dose'))) %>%
+  pivot_longer(starts_with('sbp'),
+               names_to = 'sbp_timepoints',
+               values_to = 'sbp_values') %>%
+  mutate(sbp_values = as.numeric(sbp_values), sbp_timepoints = as.character(sbp_timepoints)) %>%
+  mutate(timepoints = case_when(sbp_timepoints == "sbp_0M" ~ 0,
+                                sbp_timepoints == "sbp_6M" ~ 6,
+                               sbp_timepoints == "sbp_12M" ~ 12,
+                               sbp_timepoints == "sbp_18M" ~ 18,
+                               sbp_timepoints == "sbp_24M" ~ 24)) %>%
+  mutate(timepoints = as.factor(timepoints), 
+         statin_med_class = as.factor(statin_med_class), 
+         biguanide_med_class = as.factor(biguanide_med_class),
+         psychotic_med_class = as.factor(psychotic_med_class),
+         ccb_med_class = as.factor(ccb_med_class),
+         acei_med_class = as.factor(acei_med_class),
+         coaga_med_class = as.factor(coaga_med_class),
+         su_med_class = as.factor(su_med_class), 
+         ins_human_med_class = as.factor(ins_human_med_class)) %>%
+  mutate(timepoints = relevel(timepoints, ref = "0")) %>%
+  # Convert TRUE to Yes for all medications
+  mutate(statin_med_class = if_else(statin_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(biguanide_med_class = if_else(biguanide_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(psychotic_med_class = if_else(psychotic_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(ccb_med_class = if_else(ccb_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(acei_med_class = if_else(acei_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(coaga_med_class = if_else(coaga_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(su_med_class = if_else(su_med_class == "TRUE", "Yes", "No")) %>%
+  mutate(ins_human_med_class = if_else(ins_human_med_class == "TRUE", "Yes", "No"))
+
+# Convert NA to No for all medications
+sbp_med_class_df$statin_med_class <- sbp_med_class_df$statin_med_class %>% replace_na("No")
+sbp_med_class_df$biguanide_med_class <- sbp_med_class_df$biguanide_med_class %>% replace_na("No")
+sbp_med_class_df$psychotic_med_class <- sbp_med_class_df$psychotic_med_class %>% replace_na("No")
+sbp_med_class_df$ccb_med_class <- sbp_med_class_df$ccb_med_class %>% replace_na("No")
+sbp_med_class_df$acei_med_class <- sbp_med_class_df$acei_med_class %>% replace_na("No")
+sbp_med_class_df$coaga_med_class <- sbp_med_class_df$coaga_med_class %>% replace_na("No")
+sbp_med_class_df$su_med_class <- sbp_med_class_df$su_med_class %>% replace_na("No")
+sbp_med_class_df$ins_human_med_class <- sbp_med_class_df$ins_human_med_class %>% replace_na("No")
+
+sbp_med_class_df
+```
+
+```{r}
+# Create sbp linear model with statin
+
+sbp_statin_lm <- lm(sbp_values ~ timepoints*statin_med_class + statin_med_class, data = sbp_med_class_df)
+
+summary(sbp_statin_lm)
+Anova(sbp_statin_lm, type="III")
+```
+
+```{r}
+# Create sbp linear model with biguanides
+
+sbp_biguanide_lm <- lm(sbp_values ~ timepoints*biguanide_med_class + biguanide_med_class, data = sbp_med_class_df)
+
+summary(sbp_biguanide_lm)
+Anova(sbp_biguanide_lm, type="III")
+```
+
+```{r}
+# Create sbp linear model with ccb
+
+sbp_ccb_lm <- lm(sbp_values ~ timepoints*ccb_med_class + ccb_med_class, data = sbp_med_class_df)
+
+summary(sbp_ccb_lm)
+Anova(sbp_ccb_lm, type="III")
+```
+
+```{r}
+# Plot linear model for ccb
+
+sbp_med_class_df %>%
+  ggplot(aes(x = timepoints, y = sbp_values, group = ccb_med_class, color = ccb_med_class)) +
+  geom_jitter(width = 0.35, alpha = 0.25) +
+  geom_smooth(aes(group = ccb_med_class, color = ccb_med_class), method=lm) +
+  ylab('Systolic Blood Pressure values') +
+  xlab('Months') +
+  theme_classic() +
+      theme(axis.text.y = element_text(size = 12, face = "bold"),
+          axis.text.x = element_text(size = 12, face = "bold"),
+          axis.title.y = element_text(size = 14, face = "bold")) +
+  facet_wrap(~ccb_med_class) +
+  scale_color_manual(values = c("#C4961A", "#4E84C4"))
+```
+
+```{r}
+# Create sbp linear model with acei
+
+sbp_acei_lm <- lm(sbp_values ~ timepoints*acei_med_class + acei_med_class, data = sbp_med_class_df)
+
+summary(sbp_acei_lm)
+Anova(sbp_acei_lm, type="III")
+```
+
+```{r}
+# Plot linear model for acei
+
+sbp_med_class_df %>%
+  ggplot(aes(x = timepoints, y = sbp_values, group = acei_med_class, color = acei_med_class)) +
+  geom_jitter(width = 0.35, alpha = 0.25) +
+  geom_smooth(aes(group = acei_med_class, color = acei_med_class), method=lm) +
+  ylab('Systolic Blood Pressure values') +
+  xlab('Months') +
+  theme_classic() +
+      theme(axis.text.y = element_text(size = 12, face = "bold"),
+          axis.text.x = element_text(size = 12, face = "bold"),
+          axis.title.y = element_text(size = 14, face = "bold")) +
+  facet_wrap(~acei_med_class) +
+  scale_color_manual(values = c("#C4961A", "#4E84C4"))
+```
+
+```{r}
+# Create sbp linear model with coaga
+
+sbp_coaga_lm <- lm(sbp_values ~ timepoints*coaga_med_class + coaga_med_class, data = sbp_med_class_df)
+
+summary(sbp_coaga_lm)
+Anova(sbp_coaga_lm, type="III")
+```
+
+```{r}
+# Create sbp linear model with su_med_class
+
+sbp_su_lm <- lm(sbp_values ~ timepoints*su_med_class + su_med_class, data = sbp_med_class_df)
+
+summary(sbp_su_lm)
+Anova(sbp_su_lm, type="III")
+```
+
+```{r}
+# Plot linear model for su_med_class
+
+sbp_med_class_df %>%
+  ggplot(aes(x = timepoints, y = sbp_values, group = su_med_class, color = su_med_class)) +
+  geom_jitter(width = 0.35, alpha = 0.25) +
+  geom_smooth(aes(group = su_med_class, color = su_med_class), method=lm) +
+  ylab('Systolic Blood Pressure values') +
+  xlab('Months') +
+  theme_classic() +
+      theme(axis.text.y = element_text(size = 12, face = "bold"),
+          axis.text.x = element_text(size = 12, face = "bold"),
+          axis.title.y = element_text(size = 14, face = "bold")) +
+  facet_wrap(~su_med_class) +
+  scale_color_manual(values = c("#C4961A", "#4E84C4"))
+```
+

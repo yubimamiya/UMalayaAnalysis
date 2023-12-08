@@ -1,0 +1,347 @@
+---
+title: "Race_Analysis"
+author: "Yubi Mamiya"
+date: "2023-07-29"
+output: html_document
+---
+
+```{r}
+# libraries
+library(tidyverse)
+library(readr)
+library(readxl)
+library(car)
+```
+
+```{r}
+# Import data
+
+MeLODY_Longitudinal_Masterfile_df <- read.csv('/Users/yubimamiya/Downloads/MeLODY/MeLODY_masterfile_01.csv')
+
+str(MeLODY_Longitudinal_Masterfile_df)
+MeLODY_Longitudinal_Masterfile_df %>%
+  head(5)
+
+MeLODY_df <- read_csv('/Users/yubimamiya/Desktop/UMalaya/MeLODY_UMalaya_Data.csv')
+```
+
+```{r}
+# rename X to ID
+
+MeLODY_Longitudinal_Masterfile_df <- MeLODY_Longitudinal_Masterfile_df %>%
+   rename('ID' = 'X')
+```
+
+```{r}
+MeLODY_Longitudinal_Masterfile_df
+```
+
+
+```{r}
+# Find the final valid glucose value for each patient
+
+final_glucose_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select("ID" | starts_with('Glucose..Plasma.')) %>%
+  select(-contains(c('date', 'dose'))) %>%
+  pivot_longer(starts_with('Glucose..Plasma.'),
+               names_to = 'Glucose_timepoints',
+               values_to = 'Glucose_values') %>%
+  mutate(Glucose_values = as.numeric(Glucose_values), Glucose_timepoints = as.character(Glucose_timepoints)) %>%
+  group_by(ID) %>%
+  filter(!is.na(Glucose_values)) %>%
+  summarise_all(last)
+```
+
+```{r}
+final_glucose_df
+```
+
+
+```{r}
+# Create dataframe for analysis
+
+glucose_stats_race_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select("ID" | starts_with('Glucose..Plasma.') | race) %>%
+  select(-contains(c('date', 'dose'))) %>%
+  # why do you want to convert ID from int into double?
+  mutate(ID = as.double(ID)) %>%
+  inner_join(final_glucose_df, by = "ID") %>%
+  rename(final_glucose_df = Glucose_values) %>%
+  mutate(binary_glucose_index = if_else(final_glucose_df >6, "No", "Yes"))
+```
+
+```{r}
+glucose_stats_race_df
+```
+
+
+```{r}
+# Compute the glucose success ratio for races separately.
+
+glucose_stats_race_df %>%
+  group_by(race, binary_glucose_index) %>%
+  summarise(N = n()) %>%
+  mutate(Ratio = round(N/sum(N), 2))
+```
+
+```{r}
+# Compute the glucose success ratio by race
+
+glucose_race_summary = glucose_stats_race_df %>%
+  group_by(race, binary_glucose_index) %>%
+  summarise(N = n()) %>%
+  mutate(Ratio = round(N/sum(N), 2)) %>%
+  filter(race == "Melayu" | race == "Indian") %>%
+  filter(binary_glucose_index == "Yes")
+```
+
+```{r}
+glucose_ALLrace_summary <- glucose_race_summary %>%
+  rename(Yes_ratio = Ratio, Yes_N = N)%>%
+  mutate(No_ratio = 1-Yes_ratio, No_N = (No_ratio * Yes_N)/Yes_ratio, No_N = round(No_N, 0), total_N = Yes_N + No_N)
+
+glucose_ALLrace_summary
+
+prop.test(glucose_ALLrace_summary$Yes_N, glucose_ALLrace_summary$total_N)
+```
+
+```{r}
+# Find the final valid HbA1C value for each patient
+
+final_HBA1C_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select("ID" | starts_with('HBA1C')) %>%
+  select(-contains(c('date', 'dose'))) %>%
+  pivot_longer(starts_with('HBA1C'),
+               names_to = 'HBA1C_timepoints',
+               values_to = 'HBA1C_values') %>%
+  mutate(HBA1C_values = as.numeric(HBA1C_values), HBA1C_timepoints = as.character(HBA1C_timepoints)) %>%
+  group_by(ID) %>%
+  filter(!is.na(HBA1C_values)) %>%
+  summarise_all(last)
+```
+
+```{r}
+final_HBA1C_df
+```
+
+```{r}
+# Calculate age
+
+MeLODY_Longitudinal_Masterfile_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  mutate(time_date_entry = parse_date_time(date_entry, "dmy"), time_date_birth = parse_date_time(date_birth, "dmy")) %>%
+  mutate(age = difftime(time_date_entry, time_date_birth, units = "days"))
+
+MeLODY_Longitudinal_Masterfile_df
+```
+
+
+```{r}
+# Dataframe for analysis
+
+HBA1C_stats_race_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select("ID" | starts_with('HBA1C') | race | age) %>%
+  select(-contains(c('date', 'dose', 'IFCC', 'NGSP'))) %>%
+  mutate(ID = as.double(ID)) %>%
+  inner_join(final_HBA1C_df, by = "ID") %>%
+  rename(final_HBA1C_df = HBA1C_values) %>%
+  # 65 years old is 23725 years old
+  mutate(binary_HBA1C_index = if_else(age > 23725, if_else(final_HBA1C_df > 8, "No", "Yes"), if_else(final_HBA1C_df > 7, "No", "Yes"))) %>%
+  filter(!is.na(binary_HBA1C_index))
+```
+
+```{r}
+HBA1C_stats_race_df
+```
+
+```{r}
+# Compute the HBA1C success ratio by race
+
+HBA1C_race_summary = HBA1C_stats_race_df %>%
+  group_by(race, binary_HBA1C_index) %>%
+  summarise(N = n()) %>%
+  mutate(Ratio = round(N/sum(N), 2)) %>%
+  filter(race == "Chinese" | race == "Indian") %>%
+  filter(binary_HBA1C_index == "Yes")
+```
+
+```{r}
+HBA1C_ALLrace_summary <- HBA1C_race_summary %>%
+  rename(Yes_ratio = Ratio, Yes_N = N)%>%
+  mutate(No_ratio = 1-Yes_ratio, No_N = (No_ratio * Yes_N)/Yes_ratio, No_N = round(No_N, 0), total_N = Yes_N + No_N)
+
+HBA1C_ALLrace_summary
+
+prop.test(HBA1C_ALLrace_summary$Yes_N, HBA1C_ALLrace_summary$total_N)
+```
+
+
+```{r}
+# Compute significance
+
+chisq.test(HbA1C_race_summary$Ratio) 
+```
+
+
+```{r}
+# Find the final valid sbp value for each patient
+
+final_sbp_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select("ID" | starts_with('sbp')) %>%
+  select(-contains(c('date'))) %>%
+  pivot_longer(starts_with('sbp'),
+               names_to = 'sbp_timepoints',
+               values_to = 'sbp_values') %>%
+  mutate(sbp_values = as.numeric(sbp_values), sbp_timepoints = as.character(sbp_timepoints)) %>%
+  group_by(ID) %>%
+  filter(!is.na(sbp_values)) %>%
+  summarise_all(last)
+```
+
+```{r}
+# Check dataframe
+
+final_sbp_df
+```
+
+
+```{r}
+# Create dataframe for systolic blood pressure analysis with final values
+
+sbp_stats_race_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select("ID" | starts_with('sbp') | race) %>%
+  select(-contains(c('date'))) %>%
+  mutate(ID = as.double(ID)) %>%
+  inner_join(final_sbp_df, by = "ID") %>%
+  rename(final_sbp_df = sbp_values) %>%
+  mutate(binary_sbp_index = if_else(final_sbp_df < 130, "Yes", "No"))
+```
+
+```{r}
+# Check dataframe
+
+sbp_stats_race_df
+```
+
+```{r}
+# Compute the sbp target success ratio by race
+
+sbp_stats_race_df %>%
+  group_by(race, binary_sbp_index) %>%
+  summarise(N = n()) %>%
+  mutate(Ratio = round(N/sum(N), 2))
+```
+
+```{r}
+# Create dataframe for diastolic blood pressure analysis with final values
+
+final_dbp_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select("ID" | starts_with('dbp')) %>%
+  select(-contains(c('date'))) %>%
+  pivot_longer(starts_with('dbp'),
+               names_to = 'dbp_timepoints',
+               values_to = 'dbp_values') %>%
+  mutate(dbp_values = as.numeric(dbp_values), dbp_timepoints = as.character(dbp_timepoints)) %>%
+  group_by(ID) %>%
+  filter(!is.na(dbp_values)) %>%
+  summarise_all(last)
+```
+
+```{r}
+# Create dataframe for diastolic blood pressure analysis with final values
+# Threshold is 80
+
+dbp_stats_race_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select("ID" | starts_with('dbp') | race) %>%
+  select(-contains(c('date'))) %>%
+  mutate(ID = as.double(ID)) %>%
+  inner_join(final_dbp_df, by = "ID") %>%
+  rename(final_dbp_df = dbp_values) %>%
+  mutate(binary_dbp_index = if_else(final_dbp_df < 80, "Yes", "No"))
+```
+
+```{r}
+# Compute the dbp success ratio by race
+
+dbp_race_summary = dbp_stats_race_df %>%
+  group_by(race, binary_dbp_index) %>%
+  summarise(N = n()) %>%
+  mutate(Ratio = round(N/sum(N), 2)) %>%
+  filter(race == "Chinese" | race == "Melayu") %>%
+  filter(binary_dbp_index == "Yes")
+```
+
+```{r}
+dbp_ALLrace_summary <- dbp_race_summary %>%
+  rename(Yes_ratio = Ratio, Yes_N = N)%>%
+  mutate(No_ratio = 1-Yes_ratio, No_N = (No_ratio * Yes_N)/Yes_ratio, No_N = round(No_N, 0), total_N = Yes_N + No_N)
+
+dbp_ALLrace_summary
+
+prop.test(dbp_ALLrace_summary$Yes_N, dbp_ALLrace_summary$total_N)
+```
+
+
+
+```{r}
+# Create dataframe for LDL analysis with final values
+
+final_LDL_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select("ID" | starts_with('LDL..Serum.')) %>%
+  select(-contains(c('date'))) %>%
+  pivot_longer(starts_with('LDL..Serum.'),
+               names_to = 'LDL_timepoints',
+               values_to = 'LDL_values') %>%
+  mutate(LDL_values = as.numeric(LDL_values), LDL_timepoints = as.character(LDL_timepoints)) %>%
+  group_by(ID) %>%
+  filter(!is.na(LDL_values)) %>%
+  summarise_all(last)
+```
+
+```{r}
+# Create dataframe for LDL analysis with final values
+# Threshold is 1.8
+
+LDL_stats_race_df <- MeLODY_Longitudinal_Masterfile_df %>%
+  select("ID" | starts_with('LDL..Serum.') | race) %>%
+  select(-contains(c('date'))) %>%
+  mutate(ID = as.double(ID)) %>%
+  inner_join(final_LDL_df, by = "ID") %>%
+  rename(final_LDL_df = LDL_values) %>%
+  mutate(binary_LDL_index = if_else(final_LDL_df < 1.8, "Yes", "No"))
+```
+
+```{r}
+# Check dataframe
+
+LDL_stats_race_df
+```
+
+```{r}
+# Compute the LDL target success ratio by race
+
+LDL_stats_race_df %>%
+  group_by(race, binary_LDL_index) %>%
+  summarise(N = n()) %>%
+  mutate(Ratio = round(N/sum(N), 2))
+```
+
+```{r}
+# Compute the LDL success ratio by race
+
+LDL_race_summary = LDL_stats_race_df %>%
+  group_by(race, binary_LDL_index) %>%
+  summarise(N = n()) %>%
+  mutate(Ratio = round(N/sum(N), 2)) %>%
+  filter(race == "Chinese" | race == "Melayu") %>%
+  filter(binary_LDL_index == "Yes")
+```
+
+```{r}
+LDL_ALLrace_summary <- LDL_race_summary %>%
+  rename(Yes_ratio = Ratio, Yes_N = N)%>%
+  mutate(No_ratio = 1-Yes_ratio, No_N = (No_ratio * Yes_N)/Yes_ratio, No_N = round(No_N, 0), total_N = Yes_N + No_N)
+
+LDL_ALLrace_summary
+
+prop.test(LDL_ALLrace_summary$Yes_N, LDL_ALLrace_summary$total_N)
+```
